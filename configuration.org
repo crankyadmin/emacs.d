@@ -1,0 +1,546 @@
+#+TITLE: David's Emacs configuration
+
+* Set personal information
+
+#+BEGIN_SRC emacs-lisp
+  (setq user-full-name "David Houston"
+        user-mail-address "root@crankyadmin.net"
+        calendar-latitude 42.2
+        calendar-longitude -71.1
+        calendar-location-name "London, UK")
+#+END_SRC
+
+* Package management
+
+#+BEGIN_EXAMPLE elisp
+
+(add-to-list 'load-path "~/.cask/")
+(add-to-list 'custom-theme-load-path "~/.emacs.d/resources/themes/")
+
+#+END_EXAMPLE
+
+I use =cask= and =pallet= for managing packages.
+
+#+BEGIN_SRC emacs-lisp
+  (require 'cask)
+  (cask-initialize)
+;;  (require 'pallet)
+#+END_SRC
+
+* Editor preferences
+
+** Disable window chrome
+
+I don't usually use the menu or scroll bar, and they take up useful space.
+
+#+BEGIN_SRC emacs-lisp
+  (tool-bar-mode 0)
+  (menu-bar-mode 0)
+(when window-system
+  (scroll-bar-mode -1))
+#+END_SRC
+
+** Use fancy lambdas
+
+Why not?
+
+#+BEGIN_SRC emacs-lisp
+  (global-prettify-symbols-mode t)
+#+END_SRC
+
+** Load up a color theme
+	 
+I have my own custom color theme aptly title =David's theme= https://github.com/crankyadmin/davids-theme
+
+#+BEGIN_SRC emacs-lisp
+  (when window-system
+    (load-theme 'davids t))
+#+END_SRC
+
+** Disable visual bell
+
+=sensible-defaults= replaces the audible bell with a visual one, but I really
+don't even want that (and my Emacs/Mac pair renders it poorly). This disables
+the bell altogether.
+
+#+BEGIN_SRC emacs-lisp
+  (setq ring-bell-function 'ignore)
+#+END_SRC
+
+** Set default font and configure font resizing
+
+The standard =text-scale-= functions just resize the text in the current buffer;
+I'd generally like to resize the text in /every/ buffer, and I usually want to
+change the size of the modeline, too (this is especially helpful when
+presenting). These functions and bindings let me resize everything all together!
+
+
+#+BEGIN_SRC emacs-lisp
+  (setq hrs/default-font "Fira Code Retina")
+  (setq hrs/default-font-size 15)
+  (setq hrs/current-font-size hrs/default-font-size)
+
+  (setq hrs/font-change-increment 1.1)
+
+  (defun hrs/set-font-size ()
+    "Set the font to `hrs/default-font' at `hrs/current-font-size'."
+    (set-frame-font
+     (concat hrs/default-font "-" (number-to-string hrs/current-font-size))))
+
+  (defun hrs/reset-font-size ()
+    "Change font size back to `hrs/default-font-size'."
+    (interactive)
+    (setq hrs/current-font-size hrs/default-font-size)
+    (hrs/set-font-size))
+
+  (defun hrs/increase-font-size ()
+    "Increase current font size by a factor of `hrs/font-change-increment'."
+    (interactive)
+    (setq hrs/current-font-size
+          (ceiling (* hrs/current-font-size hrs/font-change-increment)))
+    (hrs/set-font-size))
+
+  (defun hrs/decrease-font-size ()
+    "Decrease current font size by a factor of `hrs/font-change-increment', down to a minimum size of 1."
+    (interactive)
+    (setq hrs/current-font-size
+          (max 1
+               (floor (/ hrs/current-font-size hrs/font-change-increment))))
+    (hrs/set-font-size))
+
+  (define-key global-map (kbd "C-)") 'hrs/reset-font-size)
+  (define-key global-map (kbd "C-+") 'hrs/increase-font-size)
+  (define-key global-map (kbd "C-=") 'hrs/increase-font-size)
+  (define-key global-map (kbd "C-_") 'hrs/decrease-font-size)
+  (define-key global-map (kbd "C--") 'hrs/decrease-font-size)
+
+  (hrs/reset-font-size)
+#+END_SRC
+** Highlight the current line
+
+=global-hl-line-mode= softly highlights the background color of the line
+containing point. It makes it a bit easier to find point, and it's useful when
+pairing or presenting code.
+
+#+BEGIN_SRC emacs-lisp
+  (when window-system
+    (global-hl-line-mode 1))
+#+END_SRC
+** Hide certain modes from the modeline
+
+I'd rather have only a few necessary mode identifiers on my modeline. This
+either hides or "renames" a variety of major or minor modes using the =diminish=
+package.
+
+#+BEGIN_SRC emacs-lisp
+  (defmacro diminish-minor-mode (filename mode &optional abbrev)
+    `(eval-after-load (symbol-name ,filename)
+       '(diminish ,mode ,abbrev)))
+
+  (defmacro diminish-major-mode (mode-hook abbrev)
+    `(add-hook ,mode-hook
+               (lambda () (setq mode-name ,abbrev))))
+
+  (diminish-minor-mode 'abbrev 'abbrev-mode)
+  (diminish-minor-mode 'simple 'auto-fill-function)
+  (diminish-minor-mode 'company 'company-mode)
+  (diminish-minor-mode 'eldoc 'eldoc-mode)
+  (diminish-minor-mode 'flycheck 'flycheck-mode)
+  (diminish-minor-mode 'flyspell 'flyspell-mode)
+  (diminish-minor-mode 'global-whitespace 'global-whitespace-mode)
+  (diminish-minor-mode 'projectile 'projectile-mode)
+  (diminish-minor-mode 'ruby-end 'ruby-end-mode)
+  (diminish-minor-mode 'subword 'subword-mode)
+  (diminish-minor-mode 'undo-tree 'undo-tree-mode)
+  (diminish-minor-mode 'yard-mode 'yard-mode)
+  (diminish-minor-mode 'yasnippet 'yas-minor-mode)
+  (diminish-minor-mode 'wrap-region 'wrap-region-mode)
+
+  (diminish-minor-mode 'paredit 'paredit-mode " π")
+
+  (diminish-major-mode 'emacs-lisp-mode-hook "el")
+  (diminish-major-mode 'haskell-mode-hook "λ=")
+  (diminish-major-mode 'lisp-interaction-mode-hook "λ")
+  (diminish-major-mode 'python-mode-hook "Py")
+#+END_SRC
+** Highlight uncommitted changes
+
+Use the =diff-hl= package to highlight changed-and-uncommitted lines when
+programming.
+
+#+BEGIN_SRC emacs-lisp
+  (require 'diff-hl)
+
+  (add-hook 'prog-mode-hook 'turn-on-diff-hl-mode)
+  (add-hook 'vc-dir-mode-hook 'turn-on-diff-hl-mode)
+#+END_SRC
+
+** Disable whitespace mark at 80 cols
+#+BEGIN_SRC emacs-lisp
+  (setq whitespace-line-column 500)
+#+END_SRC
+** Save buffer upon losing focus
+#+BEGIN_SRC emacs-lisp
+;; (add-hook 'focus-out-hook 'save-buffer)
+#+END_SRC
+** Configure =ido=
+
+#+BEGIN_SRC emacs-lisp
+  (setq ido-enable-flex-matching t)
+  (setq ido-everywhere t)
+  (ido-mode 1)
+  (ido-ubiquitous-mode)
+  (flx-ido-mode 1) ; better/faster matching
+  (setq ido-create-new-buffer 'always) ; don't confirm to create new buffers
+  (ido-vertical-mode 1)
+  (setq ido-vertical-define-keys 'C-n-and-C-p-only)
+#+END_SRC
+
+** Use =smex= to handle =M-x= with =ido=
+
+#+BEGIN_SRC emacs-lisp
+  (smex-initialize)
+
+  (global-set-key (kbd "M-X") 'smex-major-mode-commands)
+#+END_SRC
+
+** Move with frames with shift arrow
+#+BEGIN_SRC emacs-lisp
+(when (fboundp 'windmove-default-keybindings)
+  (windmove-default-keybindings))
+#+END_SRC
+
+* Programming customizations
+  I like shallow indentation, but tabs are displayed as 8 characters by default.
+  This reduces that.
+
+#+BEGIN_SRC emacs-lisp
+  (setq-default tab-width 2)
+#+END_SRC
+
+
+** Lisps
+
+All the lisps have some shared features, so we want to do the same things for
+all of them. That includes using =paredit-mode= to balance parentheses (and
+more!), =rainbow-delimiters= to color matching parentheses, and highlighting the
+whole expression when point is on a paren.
+
+#+BEGIN_SRC emacs-lisp
+  (setq lispy-mode-hooks
+        '(clojure-mode-hook
+          cider-mode-hook
+          emacs-lisp-mode-hook
+          lisp-mode-hook
+          scheme-mode-hook))
+
+  (dolist (hook lispy-mode-hooks)
+    (add-hook hook (lambda ()
+                     ;; (setq show-paren-style 'expression)
+                     ;; (paredit-mode)
+                     (smartparens-mode)
+                     (eldoc-mode)
+                     (rainbow-delimiters-mode))))
+#+END_SRC
+
+#+RESULTS:
+
+If I'm writing in Emacs lisp I'd like to use =eldoc-mode= to display
+documentation.
+
+#+BEGIN_SRC emacs-lisp
+  (add-hook 'emacs-lisp-mode-hook 'eldoc-mode)
+#+END_SRC
+
+** Magit
+
+The default behavior of =magit= is to ask before pushing. I haven't had any
+problems with accidentally pushing, so I'd rather not confirm that every time.
+
+#+BEGIN_SRC emacs-lisp
+  (setq magit-push-always-verify nil)
+#+END_SRC
+
+I sometimes use =git= from the terminal, and I'll use =emacsclient --tty= to
+write commits. I'd like to be in the insert state when my editor pops open for
+that.
+
+#+BEGIN_SRC emacs-lisp
+  ;; (add-hook 'with-editor-mode-hook 'evil-insert-state)
+#+END_SRC
+* Packages
+** Helm
+
+Helm: https://emacs-helm.github.io/helm/
+
+Maps M-x to helm-M-x and enables fuzzy matching
+
+#+BEGIN_SRC emacs-lisp
+(setq helm-M-x-fuzzy-match t)
+(global-set-key (kbd "M-x") 'helm-M-x)
+#+END_SRC
+
+Use Helm for the buffers list
+
+#+BEGIN_SRC emacs-lisp
+(global-set-key (kbd "C-x C-b") #'helm-buffers-list)
+#+END_SRC
+
+Same for find files. Because why not.
+
+#+BEGIN_SRC emacs-lisp
+(setq helm-buffers-fuzzy-matching t)
+(global-set-key (kbd "C-x C-f") #'helm-find-files)
+#+END_SRC
+
+Bookmarks are useful, Helm-bookmarks is really useful.
+
+#+BEGIN_SRC emacs-lisp
+(global-set-key (kbd "C-c h b") #'helm-bookmarks)
+#+END_SRC
+
+Helm Projectile (Helm in the context of the project), use the keybinding `C-c p h`
+
+And turn Helm mode on
+
+#+BEGIN_SRC emacs-lisp
+(helm-mode 1)
+#+END_SRC
+** Multi Cursors
+You have to set up your keybindings - multiple-cursors doesn't presume to know how you'd like them laid out.
+
+When you have an active region that spans multiple lines, the following will add a cursor to each line:
+
+#+BEGIN_SRC emacs-lisp
+  (global-set-key (kbd "C-S-c C-S-c") 'mc/edit-lines)
+#+END_SRC
+
+When you want to add multiple cursors not based on continuous lines, but based on keywords in the buffer, use:
+
+#+BEGIN_SRC emacs-lisp
+  (global-set-key (kbd "C->") 'mc/mark-next-like-this)
+  (global-set-key (kbd "C-<") 'mc/mark-previous-like-this)
+  (global-set-key (kbd "C-c C-<") 'mc/mark-all-like-this)
+#+END_SRC
+
+First mark the word, then add more cursors.
+
+To get out of multiple-cursors-mode, press <return> or C-g. The latter will first disable multiple regions before disabling multiple cursors. If you want to insert a newline in multiple-cursors-mode, use C-j.
+** Auto Complete
+#+BEGIN_SRC emacs-lisp
+  (ac-config-default)
+#+END_SRC
+** Projectile
+
+Projectile seems to be trashing its path... Drugs?!?
+
+#+BEGIN_SRC emacs-lisp
+(setenv "PATH" (concat (getenv "PATH") ":/usr/local/bin"))
+    (setq exec-path (append exec-path '("/usr/local/bin")))
+#+END_SRC
+** Evil Nerd Commenter
+#+BEGIN_SRC emacs-lisp
+  (evilnc-default-hotkeys)
+  (global-set-key (kbd "M-;") 'evilnc-comment-or-uncomment-lines)
+
+#+END_SRC
+** Auto-complete Emoji
+Because life is better with Emoji
+
+#+BEGIN_SRC emacs-lisp
+  (set-fontset-font
+   t 'symbol
+   (font-spec :family "Apple Color Emoji") nil 'prepend)
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+  (add-hook 'markdown-mode-hook 'ac-emoji-setup)
+  (add-hook 'git-commit-mode-hook 'ac-emoji-setup)
+#+END_SRC
+** Yasnippet
+#+BEGIN_SRC emacs-lisp
+(setq yas-snippet-dirs
+      '("~/.emacs.d/snippets"))
+
+(yas-global-mode 1)
+#+END_SRC
+** Visual Regexp
+#+BEGIN_SRC emacs-lisp
+(define-key global-map (kbd "C-c r") 'vr/replace)
+(define-key global-map (kbd "C-c q") 'vr/query-replace)
+#+END_SRC
+** Magit
+#+BEGIN_SRC sh
+  git config --global merge.conflictStyle diff3
+#+END_SRC
+
+#+BEGIN_SRC emacs-lisp
+;;(add-hook 'after-save-hook 'magit-after-save-refresh-status)
+#+END_SRC
+** HTML to Hiccup
+#+BEGIN_SRC emacs-lisp
+  (require 'html-to-hiccup)
+
+  ;(define-key clojure-mode-map (kbd "C-c h h") 'html-to-hiccup-convert-region)
+  ;(define-key clojurescript-mode-map (kbd "C-c h h") 'html-to-hiccup-convert-region)
+#+END_SRC
+** Smartparens
+#+BEGIN_SRC emacs-lisp
+  (require 'smartparens-config)
+  (smartparens-global-mode 1)
+  (global-set-key (kbd "C-)") 'sp-forward-slurp-sexp)
+#+END_SRC
+
+** Aggressive Indent
+
+Sane indentation
+
+#+BEGIN_SRC emacs-lisp
+(global-aggressive-indent-mode 1)
+(add-to-list 'aggressive-indent-excluded-modes 'html-mode)
+#+END_SRC
+** Cider
+
+#+BEGIN_SRC emacs-lisp
+(require 'ac-cider)
+
+  (add-hook 'cider-mode-hook 'ac-flyspell-workaround)
+  (add-hook 'cider-mode-hook 'ac-cider-setup)
+  (add-hook 'cider-repl-mode-hook 'ac-cider-setup)
+  (eval-after-load "auto-complete"
+    '(progn
+       (add-to-list 'ac-modes 'cider-mode)
+       (add-to-list 'ac-modes 'cider-repl-mode)))
+(defun set-auto-complete-as-completion-at-point-function ()
+  (setq completion-at-point-functions '(auto-complete)))
+
+(add-hook 'auto-complete-mode-hook 'set-auto-complete-as-completion-at-point-function)
+(add-hook 'cider-mode-hook 'set-auto-complete-as-completion-at-point-function)
+#+END_SRC
+** Paradox
+
+Fixes a bunch of 'issues' with Paradox out of the box.
+
+#+BEGIN_SRC emacs-lisp
+  (setq paradox-async-display-buffer-function nil)
+  (setq paradox-column-width-package 30)
+  (setq paradox-column-width-version 14)
+  (setq paradox-display-download-count t)
+  (setq paradox-execute-asynchronously t)
+#+END_SRC
+
+** Hlinum
+
+#+BEGIN_SRC emacs-lisp
+  (require 'hlinum)
+  (hlinum-activate)
+
+#+END_SRC
+
+Make the line numbers margin look a little better
+#+BEGIN_SRC emacs-lisp
+  (setq linum-format " %3d ")
+#+END_SRC
+
+Show line numbers in programming mode
+#+BEGIN_SRC emacs-lisp
+(add-hook 'prog-mode-hook 'linum-mode)
+#+END_SRC
+** =dired=
+
+Load up the assorted =dired= extensions.
+
+#+BEGIN_SRC emacs-lisp
+  (require 'dired-x)
+  (require 'dired+)
+  (require 'dired-open)
+#+END_SRC
+
+Open media with the appropriate programs.
+
+#+BEGIN_SRC emacs-lisp
+  (setq dired-open-extensions
+        '(("pdf" . "evince")
+          ("mkv" . "vlc")
+          ("mp4" . "vlc")
+          ("avi" . "vlc")))
+#+END_SRC
+
+These are the switches that get passed to =ls= when =dired= gets a list of
+files. We're using:
+
+- =l=: Use the long listing format.
+- =h=: Use human-readable sizes.
+- =v=: Sort numbers naturally.
+- =A=: Almost all. Doesn't include "=.=" or "=..=".
+
+#+BEGIN_SRC emacs-lisp
+  (setq-default dired-listing-switches "-lhvA")
+#+END_SRC
+
+Use "j" and "k" to move around in =dired=.
+
+#+BEGIN_SRC emacs-lisp
+  ;; (evil-define-key 'normal dired-mode-map (kbd "j") 'dired-next-line)
+  ;; (evil-define-key 'normal dired-mode-map (kbd "k") 'dired-previous-line)
+#+END_SRC
+
+Kill buffers of files/directories that are deleted in =dired=.
+
+#+BEGIN_SRC emacs-lisp
+  (setq dired-clean-up-buffers-too t)
+#+END_SRC
+
+Always copy directories recursively instead of asking every time.
+
+#+BEGIN_SRC emacs-lisp
+  (setq dired-recursive-copies 'always)
+#+END_SRC
+
+Ask before recursively /deleting/ a directory, though.
+
+#+BEGIN_SRC emacs-lisp
+  (setq dired-recursive-deletes 'top)
+#+END_SRC
+** Projectile
+#+BEGIN_SRC emacs-lisp
+  (setq projectile-require-project-root nil)
+  (projectile-global-mode 1)
+  (helm-projectile-on)
+#+END_SRC
+* Org Mode
+** Display preferences
+
+I like to see an outline of pretty bullets instead of a list of asterisks.
+
+#+BEGIN_SRC emacs-lisp
+  (add-hook 'org-mode-hook
+            (lambda ()
+              (org-bullets-mode t)))
+#+END_SRC
+
+I like seeing a little downward-pointing arrow instead of the usual ellipsis
+(=...=) that org displays when there's stuff under a header.
+
+#+BEGIN_SRC emacs-lisp
+  (setq org-ellipsis "⤵")
+#+END_SRC
+
+Use syntax highlighting in source blocks while editing.
+
+#+BEGIN_SRC emacs-lisp
+  (setq org-src-fontify-natively t)
+#+END_SRC
+
+Make TAB act as if it were issued in a buffer of the language's major mode.
+
+#+BEGIN_SRC emacs-lisp
+  (setq org-src-tab-acts-natively t)
+#+END_SRC
+
+When editing a code snippet, use the current window rather than popping open a
+new one (which shows the same information).
+
+#+BEGIN_SRC emacs-lisp
+  (setq org-src-window-setup 'current-window)
+#+END_SRC

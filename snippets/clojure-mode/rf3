@@ -1,0 +1,9 @@
+# name: rf3
+# key: rf3
+# --
+(defn $1
+  ""
+  [$2]
+  (let [$3]
+    (r/create-class {:reagent-render
+                     (fn [] $3)})))
