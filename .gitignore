@@ -9,3 +9,14 @@
 
 # Undo-tree save-files
 *.~undo-tree
+
+# keep the babelled version of `configuration.el` of git
+configuration.el
+
+# Keep cruft away...
+*.dat
+*.log
+*.eld
+*.cache
+smex-items
+tramp
